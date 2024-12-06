@@ -41,8 +41,8 @@ async def get_version(client):
 
 async def search(query,date,ismovie, client,SC_FAST_SEARCH,movie_id):
     random_headers = headers.generate()
-    random_headers['Referer'] = "https://streamingcommunity.asia/"
-    random_headers['Origin'] = "https://streamingcommunity.asia"
+    random_headers['Referer'] = "https://streamingcommunity.buzz/"
+    random_headers['Origin'] = "https://streamingcommunity.buzz"
     random_headers['Accept'] = 'application/json'  # Assuming the API returns JSON
     random_headers['Content-Type'] = 'application/json'
     #Do a request to get the ID of serie/move and it's slug in the URL
@@ -62,8 +62,8 @@ async def search(query,date,ismovie, client,SC_FAST_SEARCH,movie_id):
             #Added a Check to see if the result is what it is supposed to be
             if SC_FAST_SEARCH == "0":
                 random_headers = headers.generate()
-                random_headers['Referer'] = "https://streamingcommunity.asia/"
-                random_headers['Origin'] = "https://streamingcommunity.asia"
+                random_headers['Referer'] = "https://streamingcommunity.buzz/"
+                random_headers['Origin'] = "https://streamingcommunity.buzz"
                 response = await client.get ( f'https://streamingcommunity.{SC_DOMAIN}/titles/{tid}-{slug}', headers = random_headers, allow_redirects=True,impersonate = "chrome120")
                 soup = BeautifulSoup(response.text, "lxml")
                 data = json.loads(soup.find("div", {"id": "app"}).get("data-page"))
@@ -83,8 +83,8 @@ async def search(query,date,ismovie, client,SC_FAST_SEARCH,movie_id):
         
 async def get_film(tid,version,client):  
     random_headers = headers.generate()
-    random_headers['Referer'] = "https://streamingcommunity.asia/"
-    random_headers['Origin'] = "https://streamingcommunity.asia"
+    random_headers['Referer'] = "https://streamingcommunity.buzz/"
+    random_headers['Origin'] = "https://streamingcommunity.buzz"
     random_headers['x-inertia'] = "true"
     random_headers['x-inertia-version'] = version
     #Access the iframe
@@ -98,8 +98,8 @@ async def get_film(tid,version,client):
     parsed_url = urlparse(iframe)
     query_params = parse_qs(parsed_url.query)
     random_headers = headers.generate()
-    random_headers['Referer'] = "https://streamingcommunity.asia/"
-    random_headers['Origin'] = "https://streamingcommunity.asia"
+    random_headers['Referer'] = "https://streamingcommunity.buzz/"
+    random_headers['Origin'] = "https://streamingcommunity.buzz"
     random_headers['x-inertia'] = "true"
     random_headers['x-inertia-version'] = version
     #Get real token and expires by looking at the page in the iframe, vixcloud/embed
@@ -131,8 +131,8 @@ async def get_film(tid,version,client):
 
 async def get_season_episode_id(tid,slug,season,episode,version,client):
     random_headers = headers.generate()
-    random_headers['Referer'] = "https://streamingcommunity.asia/"
-    random_headers['Origin'] = "https://streamingcommunity.asia"
+    random_headers['Referer'] = "https://streamingcommunity.buzz/"
+    random_headers['Origin'] = "https://streamingcommunity.buzz"
     random_headers['x-inertia'] = "true"
     random_headers['x-inertia-version'] = version
     #Set some basic headers for the request  
@@ -147,8 +147,8 @@ async def get_season_episode_id(tid,slug,season,episode,version,client):
 async def get_episode_link(episode_id,tid,version,client):
     #The parameters for the request
     random_headers = headers.generate()
-    random_headers['Referer'] = "https://streamingcommunity.asia/"
-    random_headers['Origin'] = "https://streamingcommunity.asia"
+    random_headers['Referer'] = "https://streamingcommunity.buzz/"
+    random_headers['Origin'] = "https://streamingcommunity.buzz"
     params = {
                 'episode_id': episode_id, 
                 'next_episode': '1'
@@ -162,8 +162,8 @@ async def get_episode_link(episode_id,tid,version,client):
     iframe = soup.find("iframe").get("src")
     vixid = iframe.split("/embed/")[1].split("?")[0]
     random_headers = headers.generate()
-    random_headers['Referer'] = "https://streamingcommunity.asia/"
-    random_headers['Origin'] = "https://streamingcommunity.asia"
+    random_headers['Referer'] = "https://streamingcommunity.buzz/"
+    random_headers['Origin'] = "https://streamingcommunity.buzz"
     random_headers['x-inertia'] = "true"
     random_headers['x-inertia-version'] = version
     parsed_url = urlparse(iframe)
