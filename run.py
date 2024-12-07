@@ -1,18 +1,25 @@
-from flask import Flask, jsonify, abort
-from filmpertutti import filmpertutti
-from streamingcommunity import streaming_community
-from tantifilm import tantifilm
-import json
-import config
+from fastapi import FastAPI, HTTPException,Request
+from fastapi.responses import JSONResponse,RedirectResponse,HTMLResponse
+from Src.API.filmpertutti import filmpertutti
+from  Src.API.streamingcommunity import streaming_community
+from  Src.API.tantifilm import tantifilm
+from  Src.API.lordchannel import lordchannel
+from  Src.API.streamingwatch import streamingwatch
+import  Src.Utilities.config as config
 import logging
-
+from Src.API.okru import okru_get_url
+from Src.API.animeworld import animeworld
+from Src.Utilities.dictionaries import okru,STREAM,extra_sources,webru_vary,webru_dlhd,provider_map,skystreaming
+from Src.API.epg import tivu, tivu_get,epg_guide,convert_bho_1,convert_bho_2,convert_bho_3
+from Src.API.webru import webru,get_skystreaming
+from curl_cffi.requests import AsyncSession
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.middleware import SlowAPIMiddleware
+from static.static import HTML
 # Configure logging
-
-FILMPERTUTTI = config.FILMPERTUTTI
-STREAMINGCOMMUNITY = config.STREAMINGCOMMUNITY
 MYSTERIUS = config.MYSTERIUS
-TUTTIFILM = config.TUTTIFILM
-TF_DOMAIN = config.TF_DOMAIN
+DLHD = config.DLHD
 HOST = config.HOST
 PORT = int(config.PORT)
 HF = config.HF
@@ -22,205 +29,275 @@ if HF == "1":
 else:
     HF = ""
 if MYSTERIUS == "1":
-    from cool import cool
+    from Src.API.cool import cool
 
-app = Flask(__name__)
-
+app = FastAPI()
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
 MANIFEST = {
     "id": "org.stremio.mammamia",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "catalogs": [
-        {"type": "tv", "id": "tv_channels", "name": "TV Channels"}
+        {
+            "type": "tv",
+            "id": "tv_channels",
+            "name": "TV Channels",
+            "behaviorHints": {
+                "configurable": True,
+                "configurationRequired": True
+                },
+            "extra": [
+                {
+                    "name": "genre",
+                    "isRequired": False,
+                    "options": ["Rai", "Mediaset", "Sky", "Euronews", "La7", "Warner Bros", "FIT", "Sportitalia","RSI","DAZN", "Rakuten", "Pluto", "A+E", "Paramount", "Chill"]
+                }
+            ]
+        }
     ],
-    "resources": ["stream", "catalog","meta"],
+    "resources": ["stream", "catalog", "meta"],
     "types": ["movie", "series", "tv"],
     "name": "Mamma Mia",
-    "description": "Addon providing HTTPS Stream for Italian Movies/Series",
+    "description": "Addon providing HTTPS Streams for Italian Movies, Series, and Live TV! Note that you need to have Kitsu Addon installed in order to watch Anime",
     "logo": "https://creazilla-store.fra1.digitaloceanspaces.com/emojis/49647/pizza-emoji-clipart-md.png"
 }
 
-STREAMS = {
-    "tv": {
-        "skysport24": [
-            {
-                "title": "Sky Sport 24",
-                "poster": f"https://www.tanti.{TF_DOMAIN}/public/upload/channel/sky-sport-24.webp",
-                "url": "https://07-24.mizhls.ru/fls/cdn/calcioXskysport24/playlist.m3u8",
-                "behaviorHints": {
-                    "notWebReady": True,
-                    "proxyHeaders": {
-                        "request": {
-                            "Referer": "https://claplivehdplay.ru/",
-                            "Origin": "https://claplivehdplay.ru",
-                            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-                        }
-                    }
-                }
-            }
-        ],
-        "Skyuno": [
-            {
-                "title": "Sky Uno",
-                "poster": f"https://www.tanti.{TF_DOMAIN}/public/upload/channel/sky-uno.webp",
-                "url": "https://07-24.mizhls.ru/fls/cdn/calcioXskyuno/playlist.m3u8",
-                "behaviorHints": {
-                    "notWebReady": True,
-                    "proxyHeaders": {
-                        "request": {
-                            "Referer": "https://claplivehdplay.ru/",
-                            "Origin": "https://claplivehdplay.ru",
-                            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-                        }
-                    }
-                }
-            }
-        ],
-        "skyserie": [
-            {
-                "title": "Sky Serie",
-                "poster": f"https://www.tanti.{TF_DOMAIN}/public/upload/channel/sky-serie.webp",
-                "url": "https://07-24.mizhls.ru/fls/cdn/calcioXskyserie/playlist.m3u8",
-                "behaviorHints": {
-                    "notWebReady": True,
-                    "proxyHeaders": {
-                        "request": {
-                            "Referer": "https://claplivehdplay.ru/",
-                            "Origin": "https://claplivehdplay.ru",
-                            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-                        }
-                    }
-                }
-            }
-        ],
-        "Sky Nature": [
-            {
-                "title": "Sky Nature",
-                "poster": f"https://www.tanti.{TF_DOMAIN}/public/upload/channel/sky-nature.webp",
-                "url": "https://07-24.mizhls.ru/fls/cdn/calcioXskynature/playlist.m3u8",
-                "behaviorHints": {
-                    "notWebReady": True,
-                    "proxyHeaders": {
-                        "request": {
-                            "Referer": "https://claplivehdplay.ru/",
-                            "Origin": "https://claplivehdplay.ru",
-                            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-                        }
-                    }
-                }
-            }
-        ],
-        "skyinvestigation": [
-            {
-                "title": "skyinvestigation",
-                "poster": f"https://www.tanti.{TF_DOMAIN}/public/upload/channel/sky-nature.webp",
-                "url": "https://07-24.mizhls.ru/fls/cdn/calcioXskyinvestigation/playlist.m3u8",
-                "behaviorHints": {
-                    "notWebReady": True,
-                    "proxyHeaders": {
-                        "request": {
-                            "Referer": "https://claplivehdplay.ru/",
-                            "Origin": "https://claplivehdplay.ru",
-                            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-                        }
-                    }
-                }
-            }
-        ]
-    }
-}
 
 def respond_with(data):
-    resp = jsonify(data)
+    resp = JSONResponse(data)
     resp.headers['Access-Control-Allow-Origin'] = '*'
     resp.headers['Access-Control-Allow-Headers'] = '*'
     return resp
 
-@app.route('/manifest.json')
-def addon_manifest():
-    return respond_with(MANIFEST)
+@app.get('/config')
+def config():
+    return RedirectResponse(url="/")
+@app.get('/{config}/manifest.json')
+def addon_manifest(config: str): 
+    manifest_copy = MANIFEST.copy()  
+    print(config)
+    if "LIVETV"  in config:
+        return respond_with(manifest_copy)
+    elif "LIVETV" not in config:
+        manifest_copy["catalogs"] = []
+        if "catalog" in manifest_copy["resources"]:
+            manifest_copy["resources"].remove("catalog")
+        return respond_with(manifest_copy)
 
-@app.route('/')
-def root():
-    return "Hello, this is a Stremio Addon providing HTTPS Stream for Italian Movies/Series, to install it add /manifest.json to the url and then add it into the Stremio search bar"
+@app.get('/manifest.json')
+def manifest():
+    return RedirectResponse(url="/|SC|LC|SW|/manifest.json")
 
-@app.route('/catalog/<type>/<id>.json')
-def addon_catalog(type, id):
+@app.get('/', response_class=HTMLResponse)
+def root(request: Request):
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    scheme = forwarded_proto if forwarded_proto else request.url.scheme
+    instance_url = f"{scheme}://{request.url.netloc}"
+    html_content = HTML.replace("{instance_url}", instance_url)
+    return html_content
+async def addon_catalog(type: str, id: str, genre: str = None):
+    print(f"Received genre parameter: {genre}")
+    if type != "tv":
+        raise HTTPException(status_code=404)
+    
+    catalogs = {"metas": []}
+    
+    for channel in STREAM["channels"]:
+        if genre and genre not in channel.get("genres", []):
+            continue  # Skip channels that don't match the selected genre
+        
+        description = f'Watch {channel["title"]}'
+        catalogs["metas"].append({
+            "id": channel["id"],
+            "type": "tv",
+            "name": channel["title"],
+            "poster": channel["poster"],  # Add poster URL if available
+            "description": description,
+            "genres": channel.get("genres", [])
+        })
+
+    return catalogs
+@app.get('/{config}/catalog/{type}/{id}.json')
+@limiter.limit("5/second")
+async def first_catalog(request: Request,type: str, id: str, genre: str = None):
+    catalogs = await addon_catalog(type, id,genre)
+    return respond_with(catalogs)
+
+@app.get('/{config}/catalog/{type}/{id}/genre={genre}.json')
+async def first_catalog(type: str, id: str, genre: str = None):
+    catalogs = await addon_catalog(type, id,genre)
+    return respond_with(catalogs)
+
+@app.get('/{config}/meta/tv/{id}.json')
+@limiter.limit("20/second")
+async def addon_meta(request: Request,id: str):
+    # Find the channel by ID
+    channel = next((ch for ch in STREAM['channels'] if ch['id'] == id), None)
+    
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    async with AsyncSession() as client:
+        if channel["id"] in convert_bho_1 or channel["id"] in convert_bho_2 or channel["id"] in convert_bho_3:
+            description,title =  await epg_guide(channel["id"],client)
+        elif channel["id"] in tivu:
+            description = await tivu_get(channel["id"],client)
+            print(description)
+            title = ""
+        else:
+            description = f'Watch {channel["title"]}'
+            title = ""
+    meta = {
+        'meta': {
+            'id': channel['id'],
+            'type': 'tv',
+            'name': channel['name'],
+            'poster': channel['poster'],
+            'posterShape': 'landscape',
+            'description': title + "\n" + description,
+            # Additional fields can be added here
+            'background': channel['poster'],  # Example of using the same poster as background
+            'logo': channel['poster'],
+            'genres': channel.get('genres', []),  # Example of using the same poster as logo
+        }
+    }
+    if 'url' in channel:
+        meta['meta']['url'] = channel['url']  # Using the stream URL as a website link
+    return respond_with(meta)
+
+
+@app.get('/{config}/stream/{type}/{id}.json')
+@limiter.limit("5/second")
+async def addon_stream(request: Request,config, type, id,):
     if type not in MANIFEST['types']:
-        abort(404)
-    catalog = {'metas': []}
-    if type in STREAMS:
-        for stream_id in STREAMS[type]:
-            for item in STREAMS[type][stream_id]:
-                meta_item = {
-                    "id": stream_id,
-                    "type": type,
-                    "name": item['title'],
-                    "poster": item.get('poster', "https://via.placeholder.com/150")
-                }
-                catalog['metas'].append(meta_item)
-    return respond_with(catalog)
-
-@app.route('/stream/<type>/<id>.json')
-def addon_stream(type, id):
-    if type not in MANIFEST['types']:
-        abort(404)
+        raise HTTPException(status_code=404)
     streams = {'streams': []}
+    config_providers = config.split('|')
+    provider_maps = {name: "0" for name in provider_map.values()}
+    for provider in config_providers:
+            if provider in provider_map:
+                provider_name = provider_map[provider]
+                provider_maps[provider_name] = "1"
 
-    if type in STREAMS and id in STREAMS[type]:
-        logging.debug(f"Found TV channel: {id}")
-        streams['streams'] = STREAMS[type][id]
-    else:
-        logging.debug(f"Handling movie or series: {id}")
-        if MYSTERIUS == "1":
-            results = cool(id)
-            if results:
-                for resolution, link in results.items():
-                    streams['streams'].append({'title': f'{HF}Mysterious {resolution}', 'url': link})
-        if STREAMINGCOMMUNITY == "1":
-            url_streaming_community = streaming_community(id)
-            if url_streaming_community is not None:
-                streams['streams'].append({'title': f'{HF}StreamingCommunity 1080p', 'url': f'{url_streaming_community}?rendition=1080p'})
-                streams['streams'].append({'title': f'{HF}StreamingCommunity 720p', 'url': f'{url_streaming_community}?rendition=720p'})
-        if FILMPERTUTTI == "1":
-            url_filmpertutti = filmpertutti(id)
-            if url_filmpertutti is not None:
-                streams['streams'].append({'title': 'Filmpertutti', 'url': url_filmpertutti})
-        if TUTTIFILM == "1":
-            try:
-                url_tuttifilm = tantifilm(id)
-                if not isinstance(url_tuttifilm, str):
-                    for title, url in url_tuttifilm.items():    
-                        streams['streams'].append({'title': f'{HF}Tantifilm {title}', 'url': url,  'behaviorHints': {'proxyHeaders': {"request": {"Referer": "https://d000d.com/"}}, 'notWebReady': True}})
-                else:
-                    streams['streams'].append({'title': f'{HF}Tantifilm', 'url': url_tuttifilm, 'behaviorHints': {'proxyHeaders': {"request": {"Referer": "https://d000d.com/"}}, 'notWebReady': True}})
-            except Exception as e:
-                print("Tantifilm error")
-    if not streams['streams']:
-        abort(404)
+    async with AsyncSession() as client:
+        if type == "tv":
+            for channel in STREAM["channels"]:
+                if channel["id"] == id:
+                    i = 0
+                    if 'url' in channel:
+                        i = i+1
+                        streams['streams'].append({
+                            'title': f"{HF}Server {i} " + f" "+ channel['name'] + " " + channel['title'] ,
+                            'url': channel['url']
+                            })    
+                    if id in okru:
+                        i = i+1
+                        channel_url = await okru_get_url(id,client)
+                        streams['streams'].append({
+                            'title':  f"{HF}Server {i} " +  channel['title'] + " OKRU",
+                            'url': channel_url
+                        })
+                    if id in extra_sources:
+                        list_sources = extra_sources[id]
+                        for item in list_sources:
+                            i = i+1
+                            streams['streams'].append({'title':f"{HF}Server {i} " + channel['title'],'url': item})
+                    if id in skystreaming:
+                        
+                        urls = await get_skystreaming(id,client)
+                        for url in urls:
+                            i = i+1
+                            Host = urls[url]
+                            print(url,Host)
+                            streams['streams'].append({'title': f'{HF}Server {i}', 'url': url, "behaviorHints": {"notWebReady": True, "proxyHeaders": {"request": {"User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:127.0) Gecko/20100101 Firefox/127.0", "Accept": "*/*", "Accept-Language": "en-US,en;q=0.5", "Origin": "https://skystreaming.guru", "DNT": "1", "Sec-GPC": "1", "Connection": "keep-alive", "Referer": "https://skystreaming.guru/", "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Site": "cross-site", "Pragma": "no-cache", "Cache-Control": "no-cache", "TE": "trailers","Host": Host}}}})
+                            
+                    if id in webru_vary:
+                        i = i+1
+                        webru_url = await webru(id,"vary",client)
+                        streams['streams'].append({'title': f"{HF}Server {i} " + channel['title'],'url': webru_url})
+                    if id in webru_dlhd:
+                        if DLHD == "1":
+                            i = i+1
+                            webru_url_2 = await webru(id,"dlhd",client)
+                            streams['streams'].append({'title': f"{HF}Server {i} " + channel['title'],'url': webru_url_2})
+                    if id == "sky-sport-f1":
+                        test= "https://mhdtv.co.in/daddy/stream.m3u8?id=577"
+                        Referer1 = "https://mhdtv.co.in"
+                        User_Agent1 = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
+                        streams['streams'].append({'title': f'{HF}Server {i} Test mhd', 'url': test, "behaviorHints": {"notWebReady": True, "proxyHeaders": {"request": {"User-Agent": User_Agent1, "Referer": Referer1}}}})
+            
+            if not streams['streams']:
+                raise HTTPException(status_code=404)
+            return respond_with(streams)
+        elif "tt" in id or "tmdb" in id or "kitsu" in id:
+            print(f"Handling movie or series: {id}")
+            if "kitsu" in id:
+                if provider_maps['ANIMEWORLD'] == "1":
+                    animeworld_urls = await animeworld(id,client)
+                    if animeworld_urls:
+                        print(f"AnimeWorld Found Results for {id}")
+                        i = 0
+                        for url in animeworld_urls:
+                            if url:
+                                if i == 0:
+                                    title = "Original"
+                                elif i == 1:
+                                     title = "Italian"
+                                streams['streams'].append({'title': f'{HF}Animeworld {title}', 'url': url})
+                                i+=1
+            else:
+                if MYSTERIUS == "1":
+                    results = await cool(id,client)
+                    if results:
+                        print(f"Mysterius Found Results for {id}")
+                        for resolution, link in results.items():
+                            streams['streams'].append({'title': f'{HF}Mysterious {resolution}', 'url': link})
+                print(provider_maps['STREAMINGCOMMUNITY'])
+                if provider_maps['STREAMINGCOMMUNITY'] == "1":
+                    SC_FAST_SEARCH = provider_maps['SC_FAST_SEARCH']
+                    url_streaming_community,url_720_streaming_community,quality_sc, slug_sc = await streaming_community(id,client,SC_FAST_SEARCH)
+                    if url_streaming_community is not None:
+                        print(f"StreamingCommunity Found Results for {id}")
+                        if quality_sc == "1080":
+                            streams['streams'].append({"name":f'MammaMia 1080p Max', 'title': f'{HF}StreamingCommunity\n {slug_sc.replace("-"," ").capitalize()}','url': url_streaming_community})
+                            streams['streams'].append({"name": f'MammaMia 720p Max','title': f'{HF}StreamingCommunity {slug_sc.replace("-","").capitalize()}', 'url': url_720_streaming_community})
+                        else:
+                            streams['streams'].append({'title': f'{HF}StreamingCommunity 720p Max', 'url': url_streaming_community})
+                if provider_maps['LORDCHANNEL'] == "1":
+                    url_lordchannel,quality_lordchannel = await lordchannel(id,client)
+                    if quality_lordchannel == "FULL HD" and url_lordchannel !=  None:
+                        print(f"LordChannel Found Results for {id}")
+                        streams['streams'].append({'name': "MammaMia 1080p",'title': f'{HF}LordChannel', 'url': url_lordchannel})
+                    elif url_lordchannel !=  None:
+                        print(f"LordChannel Found Results for {id}")
+                        streams['streams'].append({"name": "MammaMia 720p",'title': f'{HF}LordChannel 720p', 'url': url_lordchannel})            
+                if provider_maps['FILMPERTUTTI'] == "1":
+                    url_filmpertutti = await filmpertutti(id,client)
+                    if url_filmpertutti is not None:
+                        print(f"Filmpertutti Found Results for {id}")
+                        streams['streams'].append({'title': 'Filmpertutti', 'url': url_filmpertutti})
+                if provider_maps['TANTIFILM'] == "1":
+                    TF_FAST_SEARCH = provider_maps['TF_FAST_SEARCH']                    
+                    url_tantifilm = await tantifilm(id,client,TF_FAST_SEARCH)
+                    if url_tantifilm:
+                        print(f"TantiFilm Found Results for {id}")
+                        if not isinstance(url_tantifilm, str):
+                            for title, url in url_tantifilm.items():    
+                                streams['streams'].append({'title': f'{HF}Tantifilm {title}', 'url': url,  'behaviorHints': {'proxyHeaders': {"request": {"Referer": "https://d000d.com/"}}, 'notWebReady': True}})
+                        else:
+                            streams['streams'].append({'title': f'{HF}Tantifilm', 'url': url_tantifilm,  'behaviorHints': {'proxyHeaders': {"request": {"Referer": "https://d000d.com/"}}, 'notWebReady': True}})
+                if provider_maps['STREAMINGWATCH'] == "1":
+                    url_streamingwatch = await streamingwatch(id,client)
+                    if url_streamingwatch:
+                        print(f"Streaming Watch Found Results for {id}")
+                        streams['streams'].append({'name': "MammaMia 720p",'title': f'{HF}StreamingWatch', 'url': url_streamingwatch})
+        if not streams['streams']:
+            raise HTTPException(status_code=404)
 
     return respond_with(streams)
 
-@app.route('/meta/<type>/<id>.json')
-def meta(type, id):
-    if type not in MANIFEST['types']:
-        abort(404)
 
-    meta = {}
-    for stream_id in STREAMS.get(type, {}):
-        if stream_id == id:
-            item = STREAMS[type][stream_id][0]  # Assuming there's at least one item
-            meta = {
-                "id": stream_id,
-                "type": type,
-                "name": item['title'],
-                "poster": item.get('poster', "https://icons.iconarchive.com/icons/designbolts/free-multimedia/256/TV-icon.png"),
-                "background": item.get('background', "https://icons.iconarchive.com/icons/designbolts/free-multimedia/256/TV-icon.png")
-            }
-            break
-
-    if not meta:
-        abort(404)
-
-    return respond_with({"meta": meta})
 if __name__ == '__main__':
-    app.run(host=HOST, port=PORT)
+    import uvicorn
+    uvicorn.run("run:app", host=HOST, port=PORT, log_level="info")
+    
